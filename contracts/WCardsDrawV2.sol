@@ -94,6 +94,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
 
     // Draw ID's to info
     mapping(uint256 => DrawInfo) internal allDraws_;
+    mapping(uint256 => uint256[]) internal allDrawsByType;
     CurrentValues[3] public values;
 
     mapping(uint256 => uint256) public currentDrawId;
@@ -205,6 +206,10 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
         return values[_drawtype].maxValidRange;
     }
 
+    function getDrawsPerDrawType(uint256 _drawType) external view returns (uint256[] memory){
+        return allDrawsByType[_drawType];
+    }
+
     //-------------------------------------------------------------------------
     // STATE MODIFYING FUNCTIONS
     //-------------------------------------------------------------------------
@@ -299,6 +304,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
         emit DrawOpen(drawId, _start);
 
         currentDrawId[_drawType] = drawId;
+        allDrawsByType[_drawType].push(drawId);
     }
 
     function withdrawWBlock(uint256 _amount) external onlyOwner {
