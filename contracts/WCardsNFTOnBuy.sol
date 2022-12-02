@@ -23,6 +23,8 @@ contract WCardsNFTOnBuy is ERC1155, Ownable {
     mapping(uint256 => WCardInfo) internal wcardInfo_;
     // User address => Draw ID => WCard IDs
     mapping(address => mapping(uint256 => uint256[])) internal userWCards_;
+    // Token Id to its URI
+    mapping(uint256 => string) internal tokenURI;
 
     //-------------------------------------------------------------------------
     // EVENTS
@@ -89,6 +91,10 @@ contract WCardsNFTOnBuy is ERC1155, Ownable {
         return userWCards_[_user][_drawId];
     }
 
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        return tokenURI[tokenId];
+    }
+
     function getUserWCardsPagination(
         address _user,
         uint256 _drawId,
@@ -137,7 +143,7 @@ contract WCardsNFTOnBuy is ERC1155, Ownable {
         }
 
         userWCards_[_to][_drawId].push(totalSupply_);
-        _setURI(_newURI);
+        tokenURI[tokenId] = _newURI;
         _mint(_to, tokenId, 1, msg.data);
         emit InfoMint(_to, _drawId, tokenId);
         return tokenId;

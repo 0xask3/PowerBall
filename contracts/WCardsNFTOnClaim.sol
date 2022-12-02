@@ -23,11 +23,12 @@ contract WCardsNFTOnClaim is ERC721Enumerable, Ownable, ReentrancyGuard {
 
     mapping(uint256 => WinnerInfo) public nftInfo;
 
-    uint256[] public mintedTokens;
     address public wCardsGame;
+    uint256 public tokenIdCounter;
 
     constructor(address _wCardsGame) ERC721("NFTToken", "NFT") {
         wCardsGame = _wCardsGame;
+        tokenIdCounter++;
     }
 
     function setBaseURI(string memory _uri) external onlyOwner {
@@ -46,9 +47,9 @@ contract WCardsNFTOnClaim is ERC721Enumerable, Ownable, ReentrancyGuard {
         uint256[] calldata roundNumbers
     ) external {
         require(msg.sender == wCardsGame, "Not authorized");
-        uint256 tokenId = uint256(keccak256(abi.encodePacked(user, winningNumbers, roundId, tokenBuyId, roundNumbers)));
+        uint256 tokenId = tokenIdCounter;
         _safeMint(user, tokenId);
-        mintedTokens.push(tokenId);
+        tokenIdCounter++;
 
         WinnerInfo storage nft = nftInfo[tokenId];
 
@@ -86,8 +87,8 @@ contract WCardsNFTOnClaim is ERC721Enumerable, Ownable, ReentrancyGuard {
         return super.supportsInterface(interfaceId);
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal override {
-        super._beforeTokenTransfer(from, to, tokenId);
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize) internal override {
+        super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
     // ----- ERC721 functions -----

@@ -95,6 +95,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
     // Draw ID's to info
     mapping(uint256 => DrawInfo) internal allDraws_;
     mapping(uint256 => uint256[]) internal allDrawsByType;
+    mapping(uint256 => uint256) internal drawIdToDrawType;
     CurrentValues[3] public values;
 
     mapping(uint256 => uint256) public currentDrawId;
@@ -152,9 +153,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
         require(_wBlock != address(0), "Contracts cannot be 0 address");
         require(_sizeOfDrawNumbers != 0 && _maxValidNumberRange != 0, "Draw setup cannot be 0");
         wBlock = IERC20(_wBlock);
-        coordinator = VRFCoordinatorV2Interface(
-            0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D
-        );
+        coordinator = VRFCoordinatorV2Interface(0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D);
 
         for (uint8 i = 0; i < 3; i++) {
             values[i] = CurrentValues({
@@ -206,7 +205,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
         return values[_drawtype].maxValidRange;
     }
 
-    function getDrawsPerDrawType(uint256 _drawType) external view returns (uint256[] memory){
+    function getDrawsPerDrawType(uint256 _drawType) external view returns (uint256[] memory) {
         return allDrawsByType[_drawType];
     }
 
@@ -259,6 +258,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
         require(allDraws_[_drawId].drawStatus == Status.Open, "Draw State incorrect for draw");
         uint256 requestId = requestRandomWords();
         requestToDraw[requestId] = _drawId;
+        allDraws_[_drawId].drawStatus = Status.Completed;
 
         uint256 jackpotShare = (allDraws_[_drawId].prizePoolInWBlock * 30) / 100;
         uint256 eachJackpotShare = jackpotShare / 3;
@@ -267,9 +267,8 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
         wBlock.safeTransfer(address(_teamWallet), eachJackpotShare);
         allDraws_[_drawId].prizePoolInWBlock = allDraws_[_drawId].prizePoolInWBlock - jackpotShare;
 
-        createNewDraw(0);
-        createNewDraw(1);
-        createNewDraw(2);
+        uint256 round = drawIdToDrawType[_drawId];
+        createNewDraw(round);
 
         emit JackpotDistributed(
             _drawId,
@@ -305,6 +304,7 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
 
         currentDrawId[_drawType] = drawId;
         allDrawsByType[_drawType].push(drawId);
+        drawIdToDrawType[drawId] = _drawType;
     }
 
     function withdrawWBlock(uint256 _amount) external onlyOwner {
@@ -357,9 +357,10 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
 
             uint8 matchingNumbers = _getNumberOfMatching(idToNumbers[_tokenId], draw.winningNumbers);
             uint256 prizeAmount = _prizeForMatching(matchingNumbers, _drawId);
+            allDraws_[_drawId].prizePoolInWBlock -= prizeAmount;
             wBlock.safeTransfer(address(msg.sender), prizeAmount);
 
-            nftOnClaim.mint(msg.sender, draw.winningNumbers, _drawId, _tokenId, idToNumbers[_tokenId].values());
+            nftOnClaim.mint(msg.sender, idToNumbers[_tokenId].values(), _drawId, _tokenId, draw.winningNumbers);
         }
     }
 
@@ -405,7 +406,6 @@ contract WCardsDrawV2 is VRFConsumerBaseV2, Ownable, Initializable {
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
         uint256 _drawId = requestToDraw[_requestId];
         DrawInfo storage draw = allDraws_[_drawId];
-        draw.drawStatus = Status.Completed;
         draw.winningNumbers = _split(draw.drawType, _randomWords[0]);
 
         emit DrawClose(_drawId, draw.winningNumbers);
