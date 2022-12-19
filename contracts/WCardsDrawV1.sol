@@ -41,7 +41,7 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    bytes32 public keyHash = 0x79d3d8832d904592c0bf9818b621522c988bb8b0c05cdc3b15aea1b6e8db0c15;
+    bytes32 public keyHash = 0xd4bb89654db74673a187bd804519e65e3f71a52bc55f11da7601a13dcf505314;
     uint32 public callbackGasLimit = 2000000;
     uint16 public requestConfirmations = 3;
     uint32 public numWords = 2;
@@ -123,9 +123,9 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
         uint256 drawId,
         address charityWallet,
         address distributionWallet,
-        address teamWallet,
+        address teamWallet /* ,
         uint256 jackpotShare,
-        uint256 eachJackpotShare
+        uint256 eachJackpotShare */
     );
 
     event DrawOpen(uint256 drawId, uint256 wcardSupply);
@@ -151,11 +151,11 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
         address _wBlock,
         uint8 _sizeOfDrawNumbers,
         uint16 _maxValidNumberRange
-    ) VRFConsumerBaseV2(0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D) {
+    ) VRFConsumerBaseV2(0x6A2AAd07396B36Fe02a22b33cf443582f682c82f) {
         require(_wBlock != address(0), "Contracts cannot be 0 address");
         require(_sizeOfDrawNumbers != 0 && _maxValidNumberRange != 0, "Draw setup cannot be 0");
         wBlock = IERC20(_wBlock);
-        coordinator = VRFCoordinatorV2Interface(0x2Ca8E0C643bDe4C2E08ab1fA0da3401AdAD7734D);
+        coordinator = VRFCoordinatorV2Interface(0x6A2AAd07396B36Fe02a22b33cf443582f682c82f);
 
         for (uint8 i = 0; i < 3; i++) {
             values[i] = CurrentValues({
@@ -179,7 +179,8 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
     function initialize(
         address _wCardsNFTBuy,
         address _wCardsNFTClaim,
-        uint64 _subscriptionId
+        uint64 _subscriptionId,
+        address _isRelay
     ) external initializer onlyOwner {
         require(
             _wCardsNFTBuy != address(0) && _wCardsNFTClaim != address(0) && _subscriptionId != 0,
@@ -189,6 +190,7 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
         nftOnClaim = IWCardsNFTOnClaim(_wCardsNFTClaim);
         nftOnBuy = IWCardsNFTOnBuy(_wCardsNFTBuy);
         subscriptionId = _subscriptionId;
+        isRelay[_isRelay] = true;
 
         createNewDraw(0);
         createNewDraw(1);
@@ -254,31 +256,55 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
         return requestId;
     }
 
-    function drawWinningNumbers(uint256 _drawId) external {
+    function drawWinningNumbersAll() external {
         require(isRelay[msg.sender], "Not authorized");
+
+        uint256 drawTypeZero = currentDrawId[0];
+        uint256 drawTypeOne = currentDrawId[1];
+        uint256 drawTypeTwo = currentDrawId[2];
+
+        if (
+            allDraws_[drawTypeZero].closingTimestamp >= block.timestamp &&
+            allDraws_[drawTypeOne].closingTimestamp >= block.timestamp &&
+            allDraws_[drawTypeTwo].closingTimestamp >= block.timestamp
+        ) {
+            revert("No draw open now");
+        }
+
+        if (allDraws_[drawTypeZero].closingTimestamp <= block.timestamp) {
+            drawWinningNumbers(drawTypeZero);
+        }
+
+        if (allDraws_[drawTypeOne].closingTimestamp <= block.timestamp) {
+            drawWinningNumbers(drawTypeOne);
+        }
+
+        if (allDraws_[drawTypeTwo].closingTimestamp <= block.timestamp) {
+            drawWinningNumbers(drawTypeTwo);
+        }
+    }
+
+    function drawWinningNumbers(uint256 _drawId) internal {
         require(allDraws_[_drawId].closingTimestamp <= block.timestamp, "Cannot set winning numbers during draw");
         require(allDraws_[_drawId].drawStatus == Status.Open, "Draw State incorrect for draw");
         uint256 requestId = requestRandomWords();
         requestToDraw[requestId] = _drawId;
         allDraws_[_drawId].drawStatus = Status.Completed;
 
-        uint256 jackpotShare = (allDraws_[_drawId].prizePoolInWBlock * 30) / 100;
+        /* uint256 jackpotShare = (allDraws_[_drawId].prizePoolInWBlock * 30) / 100;
         uint256 eachJackpotShare = jackpotShare / 3;
         wBlock.safeTransfer(address(_charityWallet), eachJackpotShare);
         wBlock.safeTransfer(address(_distributionWallet), eachJackpotShare);
-        wBlock.safeTransfer(address(_teamWallet), eachJackpotShare);
-        allDraws_[_drawId].prizePoolInWBlock = allDraws_[_drawId].prizePoolInWBlock - jackpotShare;
-
-        uint256 round = drawIdToDrawType[_drawId];
-        createNewDraw(round);
+        wBlock.safeTransfer(address(_teamWallet), eachJackpotShare); */
+        allDraws_[_drawId].prizePoolInWBlock = allDraws_[_drawId].prizePoolInWBlock;
 
         emit JackpotDistributed(
             _drawId,
             _charityWallet,
             _distributionWallet,
-            _teamWallet,
+            _teamWallet /* ,
             jackpotShare,
-            eachJackpotShare
+            eachJackpotShare */
         );
 
         emit RequestNumbers(_drawId, requestId);
@@ -448,6 +474,8 @@ contract WCardsDrawV1 is VRFConsumerBaseV2, Ownable, Initializable {
         }
 
         draw.winnerCount = winnerCount;
+        uint256 round = drawIdToDrawType[_drawId];
+        createNewDraw(round);
 
         emit DrawClose(_drawId, draw.winningNumbers, winnerCount);
     }
